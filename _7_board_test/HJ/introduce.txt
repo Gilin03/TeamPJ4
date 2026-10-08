@@ -1,5 +1,5 @@
 이름 또는 닉네임: HJ
-담당 역할:
-관심 분야:
-사용 가능한 기술:
-조원들에게 한마디:
+담당 역할: 조장
+관심 분야: 보안
+사용 가능한 기술: Java · Spring Boot · Spring Security · JPA · JWT / React · Vite / MySQL · Supabase(RLS) / Docker · GitHub Actions · Vercel / WebAuthn(패스키) · Python · n8n
+조원들에게 한마디: 나이도 제일 어리고 여러분보다 경험이 많이 부족할 수도 있습니다. 하지만 열심히 노력해서 저희 팀이 탑이 될 수 있도록 하겠습니다. 잘 부탁드립니다!
