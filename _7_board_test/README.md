@@ -56,11 +56,10 @@ CREATE DATABASE my_new_board_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 
 ## 3. `.env` 만들기
 
-`.env` 는 비밀이라 git 에 올라가지 않는다. 같은 폴더의 **`.env.example`** 또는
-**`.env 강사용예시`** 를 복사해서 값을 채운다.
+`.env` 는 비밀이라 git 에 올라가지 않는다. 같은 폴더의 **`.env.example`** 을 복사해서 값을 채운다.
 
 ```bash
-copy ".env 강사용예시" .env      # Windows
+copy .env.example .env      # Windows
 ```
 
 | 키 | 설명 |
