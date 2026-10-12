@@ -4,11 +4,13 @@ This setup observes scans against the Flask host through Wazuh. It keeps Hydra l
 
 ## Flask 404 scan path
 
-The board writes one `web_scan_404` line to its existing `logs/security.log`; the existing Windows Agent `security*.log` localfile collector is reused. Wazuh rule 100232 records a single 404. Rule 100233 correlates five events from the same source IP within 60 seconds and is the only 404 rule eligible for a 300-second Windows `netsh` Active Response.
+The board writes a `web_scan_404` line to its existing `logs/security.log` and keeps sending the existing GELF event to Graylog. The tracked Wazuh decoder also accepts the instructor's `http_404` line format, so either spelling is collected by the same Windows Agent `security*.log` input. Rule 100232 records one 404; rule 100233 correlates five events from the same source IP within 60 seconds.
 
-## Suricata path
+## Suricata paths
 
-Kali WSL runs Suricata on `eth0` and writes EVE JSON to `/var/log/suricata/eve.json`. The Kali Wazuh Agent reads that file as JSON. The ET rules already present in the lab ruleset include Nmap NSE signature IDs 2009358/2009359 and SQLmap signature ID 2008538. Wazuh rules 100234 and 100235 map those signatures separately. Rule IDs are tied to observed signature IDs; if the active ruleset changes, re-check the EVE alert before changing them.
+The Windows `board-host` agent watches TeamPJ4 `logs/security*.log`, including `security_suricata.log`. The maintained Kali forwarder is `forward_ids.py` in this folder. In Kali WSL it writes to `/mnt/c/ktb/team4/TeamPJ4/_7_board_test/logs/security_suricata.log`; a Windows `C:\ktb\...` path is not valid Linux path syntax. It reads `/tmp/ids/recovered/eve.json` by default, or the first path argument, sends GELF to Graylog UDP `12201`, writes timestamped `suricata_alert src_ip=... sid=... signature=...` lines, then exits at end of file. Start it after the test event is in EVE, or pass an EVE file containing that event. Wazuh rule `100250` matches the stable `suricata_alert` marker, rules `100251`/`100252` classify Nmap/SQLmap, and `100253` detects repeated alerts. This path does not require a separate Kali agent.
+
+The EVE JSON path is retained as a second option: Kali WSL runs Suricata on `eth0`, and a separately enrolled Kali Wazuh Agent reads `/var/log/suricata/eve.json`. Rules 100234 and 100235 match the lab's observed ET Nmap NSE signature IDs 2009358/2009359 and SQLmap signature ID 2008538. The manager must show the Kali agent as Active before expecting events from this path.
 
 For this lab, Suricata HOME_NET is set to the current WSL default gateway (/32), which is the Windows Flask host. Re-check `ip route show default` after WSL networking changes and update HOME_NET before starting Suricata. Do not add the Kali source address to HOME_NET; ET's Nmap/SQLmap signatures expect an external source and a protected HTTP server.
 
@@ -34,4 +36,4 @@ Wazuh Manager already defines the `netsh` command. Configure scoped `defined-age
 
 ## Current state record
 
-This document describes the intended configuration. Update it with observed timestamps and results only after the run. No EVE alert or firewall response is claimed until verified live.
+This document describes the intended configuration. Update it with observed timestamps and results only after the run. On 2026-10-12, a controlled Nmap-format forwarder event produced Wazuh rule 100251 on agent 001 from `security_suricata.log`; this verifies the text-log forwarding path, not a live network scan. No firewall response is claimed.

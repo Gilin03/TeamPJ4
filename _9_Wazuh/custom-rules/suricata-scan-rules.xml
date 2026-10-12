@@ -1,4 +1,5 @@
 <group name="ids,suricata,scanner,">
+  <!-- Kali Wazuh Agent reads Suricata EVE JSON; preserve the existing rules. -->
   <rule id="100234" level="12">
     <if_sid>86601</if_sid>
     <field name="alert.signature_id" type="pcre2">^(2009358|2009359)$</field>
@@ -10,5 +11,36 @@
     <field name="alert.signature_id">^2008538$</field>
     <description>Suricata: SQLmap scan observed ($(src_ip))</description>
     <group>suricata,sqlmap_scan,active_response,</group>
+  </rule>
+
+  <!-- board-host also collects security_suricata.log through security*.log. -->
+  <rule id="100250" level="3">
+    <match>suricata_alert</match>
+    <description>TeamPJ4 Suricata alert from $(srcip)</description>
+    <group>suricata,ids_alert,flask_board,</group>
+  </rule>
+  <rule id="100251" level="10">
+    <if_sid>100250</if_sid>
+    <match type="pcre2">(?i)(sid=(2009358|2009359)|Nmap|NSE|Portscan)</match>
+    <description>TeamPJ4 Suricata Nmap scan from $(srcip)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>suricata,ids_alert,nmap_scan,</group>
+  </rule>
+  <rule id="100252" level="12">
+    <if_sid>100250</if_sid>
+    <match type="pcre2">(?i)(sid=2008538|SQLmap|SQL Injection)</match>
+    <description>TeamPJ4 Suricata SQLmap alert from $(srcip)</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>suricata,ids_alert,sqlmap_scan,</group>
+  </rule>
+  <rule id="100253" level="10" frequency="6" timeframe="30" ignore="60">
+    <if_matched_sid>100250</if_matched_sid>
+    <same_srcip />
+    <description>Repeated TeamPJ4 Suricata alerts from $(srcip)</description>
+    <group>suricata,ids_alert,attack_frequency,</group>
   </rule>
 </group>

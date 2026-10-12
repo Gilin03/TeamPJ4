@@ -36,6 +36,14 @@ services:
     volumes:
       - wazuh_etc:/var/ossec/etc
       - wazuh_logs:/var/ossec/logs
+      - wazuh_multigroups:/var/ossec/var/multigroups
+      - ./config/flask-board/agent.conf:/var/ossec/etc/shared/flask-board/agent.conf:ro
+      - ./config/flask-board/custom/flask-board-login-decoder.xml:/var/ossec/etc/decoders/flask-board-login-decoder.xml:ro
+      - ./config/flask-board/custom/flask-board-login-rules.xml:/var/ossec/etc/rules/flask-board-login-rules.xml:ro
+      - ./custom-rules/flask-webscan-decoder.xml:/var/ossec/etc/decoders/flask-board-webscan-decoder.xml:ro
+      - ./custom-rules/flask-webscan-rules.xml:/var/ossec/etc/rules/flask-board-webscan-rules.xml:ro
+      - ./custom-rules/suricata-text-decoder.xml:/var/ossec/etc/decoders/team4-suricata-text-decoder.xml:ro
+      - ./custom-rules/suricata-scan-rules.xml:/var/ossec/etc/rules/suricata-scan-rules.xml:ro
 
       # 추가: Filebeat 설정 보존
       - filebeat_etc:/etc/filebeat
@@ -147,6 +155,7 @@ networks:
 volumes:
   wazuh_etc:
   wazuh_logs:
+  wazuh_multigroups:
 
   # 추가
   filebeat_etc:

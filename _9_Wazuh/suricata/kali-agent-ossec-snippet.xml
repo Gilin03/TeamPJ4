@@ -2,5 +2,6 @@
   <localfile>
     <location>/var/log/suricata/eve.json</location>
     <log_format>json</log_format>
+    <only-future-events>yes</only-future-events>
   </localfile>
 </ossec_config>
