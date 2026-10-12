@@ -9,6 +9,7 @@ from flask import Blueprint, current_app, jsonify, request
 from werkzeug.security import generate_password_hash
 
 from .gelf import send_gelf
+from .seclog import write_auth_fail
 from .pagination import SortError, paginate, severity_rank
 from extensions import db
 from models import Incident, Post, SecurityEvent, User
@@ -52,6 +53,12 @@ def require_api_key(fn):
                   src_ip=(request.headers.get('X-Forwarded-For', request.remote_addr)
                           or '0.0.0.0').split(',')[0].strip(),
                   path=request.path[:120], code=401)
+      except Exception:
+        pass
+      # 이중출력: Wazuh 에이전트가 읽는 security.log 에도 한 줄(S6 wazuh-dashboard 노출)
+      try:
+        write_auth_fail(request.headers.get('X-Forwarded-For', request.remote_addr),
+                        request.path[:120])
       except Exception:
         pass
       return jsonify({'msg': 'API 키가 없거나 잘못되었습니다.'}), 401
