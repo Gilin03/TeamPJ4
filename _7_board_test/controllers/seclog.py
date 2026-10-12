@@ -41,3 +41,23 @@ def write_seclog(event, user, src_ip):
       f.write(line)
   except OSError:
     pass   # 로그 파일 문제로 로그인이 멈추면 안 된다(가용성 우선)
+
+
+def write_web_scan_log(src_ip, status_code, path):
+  """Wazuh가 수집할 404 스캔 신호를 비밀값 없이 한 줄 기록한다."""
+  if status_code != 404:
+    return
+  log_path = current_app.config.get('SECURITY_LOG_PATH')
+  if not log_path:
+    return
+  first_hop = str(src_ip or '').split(',')[0].strip()
+  now = datetime.now()
+  stamp = now.strftime('%Y-%m-%d %H:%M:%S.') + f'{now.microsecond // 1000:03d}'
+  line = (f'{stamp} web_scan_404 status=404 '
+          f'src_ip={_clean(first_hop, 45)} path={_clean(path, 200)}\n')
+  try:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'a', encoding='utf-8') as f:
+      f.write(line)
+  except OSError:
+    pass

@@ -17,6 +17,7 @@ from controllers import all_blueprints
 from extensions import db, jwt
 from models import BlockedIP
 from controllers.gelf import send_gelf
+from controllers.seclog import write_web_scan_log
 
 
 def _client_ip():
@@ -113,12 +114,17 @@ def create_app(config_class=Config):
   def _web_scan_probe(response):
     """스캐너(nikto·dirbuster 등)는 없는 경로에 404 를 대량 유발한다.
     404 를 GELF(rule='web-scan')로 신고 → Graylog src_ip 집계가 '한 IP 404 폭주'를 탐지."""
-    try:
-      if response.status_code == 404 and not request.path.startswith('/api/admin'):
+    if response.status_code == 404 and not request.path.startswith('/api/admin'):
+      ip = _client_ip()
+      try:
         send_gelf(f"404 probe {request.path[:80]}", rule='web-scan',
-                  src_ip=_client_ip(), path=request.path[:120], code=404)
-    except Exception:
-      pass
+                  src_ip=ip, path=request.path[:120], code=404)
+      except Exception:
+        pass
+      try:
+        write_web_scan_log(ip, response.status_code, request.path)
+      except Exception:
+        pass
     return response
 
   return app

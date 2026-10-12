@@ -1,0 +1,13 @@
+<group name="flask_board,web_scan,">
+  <rule id="100232" level="3">
+    <decoded_as>flask-board-webscan</decoded_as>
+    <description>Flask board: HTTP 404 path probe from $(srcip)</description>
+    <group>web_scan,flask_board,</group>
+  </rule>
+  <rule id="100233" level="10" frequency="5" timeframe="60" ignore="60">
+    <if_matched_sid>100232</if_matched_sid>
+    <same_srcip />
+    <description>Flask board: repeated HTTP 404 scan from $(srcip)</description>
+    <group>web_scan,active_response,flask_board,</group>
+  </rule>
+</group>

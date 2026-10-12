@@ -1,0 +1,14 @@
+<group name="ids,suricata,scanner,">
+  <rule id="100234" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id" type="pcre2">^(2009358|2009359)$</field>
+    <description>Suricata: Nmap NSE HTTP scan observed ($(src_ip))</description>
+    <group>suricata,nmap_scan,active_response,</group>
+  </rule>
+  <rule id="100235" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">^2008538$</field>
+    <description>Suricata: SQLmap scan observed ($(src_ip))</description>
+    <group>suricata,sqlmap_scan,active_response,</group>
+  </rule>
+</group>

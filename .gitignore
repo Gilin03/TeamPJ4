@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 .omc/
+
+# Local Wazuh certificates and configuration are machine-specific and must stay untracked.
+_9_Wazuh/config/

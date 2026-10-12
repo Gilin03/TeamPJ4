@@ -1,0 +1,5 @@
+<decoder name="flask-board-webscan">
+  <prematch type="pcre2">^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} web_scan_404 status=404 src_ip=</prematch>
+  <regex type="pcre2">^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} web_scan_404 status=404 src_ip=([^\s]+) path=([^\s]+)$</regex>
+  <order>srcip,url</order>
+</decoder>

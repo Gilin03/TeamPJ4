@@ -45,3 +45,7 @@ services:
 volumes:
   mongo_data:
   os_data:
+
+networks:
+  default:
+    name: 9_graylog_default
