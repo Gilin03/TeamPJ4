@@ -7,11 +7,14 @@
     <group>suricata,nmap_scan,active_response,</group>
   </rule>
   <rule id="100235" level="12">
-    <if_sid>86601</if_sid>
-    <field name="alert.signature_id">^2008538$</field>
-    <description>Suricata: SQLmap scan observed ($(src_ip))</description>
-    <group>suricata,sqlmap_scan,active_response,</group>
-  </rule>
+  <if_sid>86601</if_sid>
+  <field name="alert.signature_id" type="pcre2">^(2008538|2022816)$</field>
+  <description>Suricata: SQLmap / SQLi scan observed ($(src_ip))</description>
+  <mitre>
+    <id>T1190</id>
+  </mitre>
+  <group>suricata,sqlmap_scan,active_response,</group>
+</rule>
 
   <!-- board-host also collects security_suricata.log through security*.log. -->
   <rule id="100250" level="3">
@@ -30,7 +33,7 @@
   </rule>
   <rule id="100252" level="12">
     <if_sid>100250</if_sid>
-    <match type="pcre2">(?i)(sid=2008538|SQLmap|SQL Injection)</match>
+    <match type="pcre2">(?i)(sid=(2008538|2022816)|SQLmap|SQL Injection|SQLi)</match>
     <description>TeamPJ4 Suricata SQLmap alert from $(srcip)</description>
     <mitre>
       <id>T1190</id>

@@ -16,7 +16,7 @@ services:
       - INDEXER_PASSWORD=SecretPassword
 
       # 추가: Filebeat TLS
-      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - FILEBEAT_SSL_VERIFICATION_MODE=certificate
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
       - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
       - SSL_KEY=/etc/ssl/filebeat.key

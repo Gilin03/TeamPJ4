@@ -10,7 +10,7 @@
 
   {% include 'partials/_nav.html' %}
 
-  <main class="max-w-5xl mx-auto px-4 py-6 flex-1 w-full">
+  <main class="max-w-5xl xl:max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 py-6 flex-1 w-full">
     <div class="mb-6">
       <h2 class="text-2xl font-bold">🔐 관리자 — 회원 권한(인가) 관리</h2>
       <p class="text-sm text-gray-500 mt-1">RBAC 등급(user/gold/admin) 부여·회수. admin 계정으로 로그인해야 합니다.</p>
@@ -73,37 +73,93 @@
 
       <!-- 회원 목록 -->
       <section class="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div class="p-4 flex items-center justify-between">
-          <h3 class="font-semibold">회원 목록</h3>
-          <button id="refresh-users" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-indigo-700">새로고침</button>
+        <div class="p-4 flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h3 class="font-semibold">회원 목록</h3>
+            <p class="text-xs text-gray-400 mt-0.5">
+              차단 = 계정 잠금 — 차단된 회원은 로그인이 거부된다(423)
+              · 전체 <b id="u-total">-</b>명
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap text-xs">
+            <input id="u-search" type="search" placeholder="아이디 검색"
+                   class="border border-gray-300 rounded px-2 py-1 w-36 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="u-role" class="border border-gray-300 rounded px-2 py-1">
+              <option value="">역할 전체</option>
+              <option value="user">user</option>
+              <option value="gold">gold</option>
+              <option value="admin">admin</option>
+            </select>
+            <select id="u-locked" class="border border-gray-300 rounded px-2 py-1">
+              <option value="">차단 여부 전체</option>
+              <option value="1">🔒 차단됨</option>
+              <option value="0">정상</option>
+            </select>
+            <button id="refresh-users" class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">새로고침</button>
+          </div>
+        </div>
+        <!-- 일괄 처리 -->
+        <div class="px-4 pb-3 flex items-center gap-2 flex-wrap text-xs">
+          <button id="u-lock-selected" disabled
+                  class="px-3 py-1.5 rounded bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+            선택 차단 (<span class="u-sel-count">0</span>)
+          </button>
+          <button id="u-unlock-selected" disabled
+                  class="px-3 py-1.5 rounded bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">
+            선택 해제 (<span class="u-sel-count">0</span>)
+          </button>
+          <button id="u-delete-selected" disabled
+                  class="px-3 py-1.5 rounded bg-gray-800 text-white font-medium hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed">
+            🗑 선택 삭제 (<span class="u-sel-count">0</span>)
+          </button>
+          <button id="u-unlock-all"
+                  class="px-3 py-1.5 rounded border border-emerald-300 text-emerald-700 font-medium hover:bg-emerald-50">
+            차단 회원 전체 해제
+          </button>
+          <span class="text-gray-400">전체 해제는 지금 검색·역할 조건의 차단 회원 전부(다른 페이지 포함)
+            · 삭제는 그 회원의 게시글까지 지우며 되돌릴 수 없다(본인·soarbot 제외)</span>
+          <span id="u-msg" class="ml-auto"></span>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm whitespace-nowrap">
-            <thead class="bg-gray-50 text-gray-600">
+          <table class="resp-table w-full text-sm whitespace-nowrap">
+            <!-- data-sort 가 있는 머리글만 눌러서 정렬된다(서버 _USER_SORTS 와 같다) -->
+            <thead id="user-head" class="bg-gray-50 text-gray-600">
               <tr>
-                <th class="text-left px-4 py-2 font-medium">#</th>
-                <th class="text-left px-4 py-2 font-medium">아이디</th>
-                <th class="text-left px-4 py-2 font-medium">역할</th>
+                <th class="px-4 py-2 w-8">
+                  <input id="u-check-all" type="checkbox" title="이 페이지 전체 선택" class="align-middle cursor-pointer">
+                </th>
+                <th data-sort="id" class="text-left px-4 py-2 font-medium">#</th>
+                <th data-sort="username" class="text-left px-4 py-2 font-medium">아이디</th>
+                <th data-sort="role" class="text-left px-4 py-2 font-medium">역할</th>
+                <th data-sort="is_locked" class="text-left px-4 py-2 font-medium">차단 여부</th>
+                <th data-sort="failed_logins" class="text-left px-4 py-2 font-medium">로그인 실패</th>
+                <th data-sort="locked_at" class="text-left px-4 py-2 font-medium">차단 시각</th>
+                <th class="text-left px-4 py-2 font-medium">차단 사유</th>
                 <th class="text-left px-4 py-2 font-medium">부여자</th>
-                <th class="text-left px-4 py-2 font-medium">부여시각</th>
-                <th class="text-left px-4 py-2 font-medium">사유</th>
                 <th class="text-left px-4 py-2 font-medium">동작</th>
               </tr>
             </thead>
             <tbody id="user-rows" class="divide-y divide-gray-100">
-              <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">로그인 후 불러옵니다.</td></tr>
+              <tr><td colspan="10" class="px-4 py-6 text-center text-gray-400">로그인 후 불러옵니다.</td></tr>
             </tbody>
           </table>
         </div>
+        <div id="user-pager"
+             class="px-4 py-3 border-t flex items-center justify-between flex-wrap gap-2 text-sm"></div>
       </section>
 
       <p class="text-xs text-gray-400">
-        API: <code>GET /api/admin/users</code> · <code>POST /api/admin/grant</code> ·
-        <code>POST /api/admin/revoke</code> · <code>GET /api/admin/violations</code>
+        API: <code>GET /api/admin/users</code>(?q·role·locked·page·sort) · <code>POST /api/admin/grant</code> ·
+        <code>POST /api/admin/revoke</code> · <code>GET /api/admin/violations</code> ·
+        <code>POST /api/admin/users/lock</code> · <code>POST /api/admin/users/unlock</code> ·
+        <code>POST /api/admin/users/delete</code>
         — 회수(revoke)는 파이썬 봇→Graylog→n8n 이 자동으로도 호출합니다.
       </p>
     </div>
   </main>
+
+  {# 페이저·정렬 머리글 공용 함수 (대시보드 표와 같은 것) #}
+  {% include 'partials/_table_pager.html' %}
 
   <script>
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -131,9 +187,24 @@
       } catch (e) { msg.textContent = '네트워크 오류'; }
     }
 
+    // 회원 표의 보기 상태 — 기본은 가입 순(# 오름차순).
+    const uState = newTableState();
+    uState.sort = 'id';
+    uState.order = 'asc';
+    const uSelected = new Set();          // 고른 회원 id
+
+    function fetchUsers() {
+      const qs = tableQuery(uState, {
+        q: document.getElementById('u-search').value.trim(),
+        role: document.getElementById('u-role').value,
+        locked: document.getElementById('u-locked').value,
+      });
+      return fetch('/api/admin/users?' + qs, { headers: authH() });
+    }
+
     async function enterAdmin() {
       // admin 권한 확인 겸 목록 로드
-      const r = await fetch('/api/admin/users', { headers: authH() });
+      const r = await fetchUsers();
       if (r.status === 401) {
         document.getElementById('lg-msg').textContent =
           '이 계정은 admin 이 아닙니다(관리자 권한 필요).';
@@ -142,7 +213,7 @@
       document.getElementById('login-box').classList.add('hidden');
       document.getElementById('admin-area').classList.remove('hidden');
       document.getElementById('me-name').textContent = localStorage.getItem(NAME_KEY) || '';
-      renderUsers(await r.json());
+      renderUsers(r, await r.json());
     }
 
     function logout() {
@@ -151,40 +222,165 @@
       document.getElementById('login-box').classList.remove('hidden');
     }
 
-    function renderUsers(d) {
+    const BADGE = {
+      admin: '<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">🔐 admin</span>',
+      gold: '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">🏅 gold</span>',
+      user: '<span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs">user</span>',
+    };
+    const lockBadge = (locked) => locked
+      ? '<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">🔒 차단</span>'
+      : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs">정상</span>';
+    const ts = (v) => esc((v || '').replace('T', ' ').slice(0, 19));
+
+    function renderUsers(r, d) {
       const tb = document.getElementById('user-rows');
+      paintSortHeaders(document.getElementById('user-head'), uState);
+      // 페이지·검색·정렬이 바뀌면 화면의 줄이 바뀐다 — 안 보이는 회원이 선택된 채
+      // 남아 있으면 '선택 차단'이 엉뚱한 사람을 잠근다. 그래서 매번 비운다.
+      uSelected.clear();
+
+      if (!r.ok) {
+        tb.innerHTML = `<tr><td colspan="10" class="px-4 py-6 text-center text-red-500">${esc(d.msg || '조회 실패')}</td></tr>`;
+        document.getElementById('user-pager').innerHTML = '';
+        updateUserSelUi();
+        return;
+      }
+      document.getElementById('u-total').textContent = d.total ?? '-';
       const rows = d.users || [];
-      if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">회원이 없습니다.</td></tr>'; return; }
-      const BADGE = {
-        admin: '<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">🔐 admin</span>',
-        gold: '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">🏅 gold</span>',
-        user: '<span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs">user</span>',
-      };
-      tb.innerHTML = rows.map(u => {
-        // user 가 아니면(gold·admin) 회수 대상 — 회수는 언제나 user 로 되돌린다.
-        const canRevoke = u.role !== 'user';
-        const roleBadge = BADGE[u.role] || esc(u.role);
-        const action = canRevoke
-          ? `<button data-user="${esc(u.username)}" class="revoke-btn bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700">회수</button>`
-          : '<span class="text-gray-300 text-xs">—</span>';
-        return `<tr class="hover:bg-gray-50">
-          <td class="px-4 py-2 text-gray-400">${u.id}</td>
-          <td class="px-4 py-2 font-medium">${esc(u.username)}</td>
-          <td class="px-4 py-2">${roleBadge}</td>
-          <td class="px-4 py-2 text-gray-600">${esc(u.role_granted_by || '')}</td>
-          <td class="px-4 py-2 text-gray-400">${esc((u.role_granted_at || '').replace('T', ' ').slice(0, 19))}</td>
-          <td class="px-4 py-2 text-gray-600 max-w-xs truncate" title="${esc(u.role_reason)}">${esc(u.role_reason || '')}</td>
-          <td class="px-4 py-2">${action}</td>
-        </tr>`;
-      }).join('');
-      tb.querySelectorAll('.revoke-btn').forEach(b =>
-        b.addEventListener('click', () => revoke(b.dataset.user)));
+      const me = localStorage.getItem(NAME_KEY);
+      tb.innerHTML = !rows.length
+        ? '<tr><td colspan="10" class="px-4 py-6 text-center text-gray-400">조건에 맞는 회원이 없습니다.</td></tr>'
+        : rows.map(u => {
+          // user 가 아니면(gold·admin) 회수 대상 — 회수는 언제나 user 로 되돌린다.
+          const revokeBtn = u.role !== 'user'
+            ? `<button data-user="${esc(u.username)}" class="revoke-btn bg-red-600 text-white px-2 py-0.5 rounded text-xs hover:bg-red-700">회수</button>` : '';
+          // 본인은 차단 버튼을 숨긴다(서버도 본인 차단은 건너뛴다).
+          const lockBtn = u.is_locked
+            ? `<button data-id="${u.id}" class="unlock-one bg-emerald-600 text-white px-2 py-0.5 rounded text-xs hover:bg-emerald-700">해제</button>`
+            : (u.username === me ? ''
+              : `<button data-id="${u.id}" data-user="${esc(u.username)}" class="lock-one border border-red-300 text-red-700 px-2 py-0.5 rounded text-xs hover:bg-red-50">차단</button>`);
+          // 본인·시스템 계정은 삭제 버튼을 숨긴다(서버도 건너뛴다).
+          const deleteBtn = (u.username === me || PROTECTED.includes(u.username)) ? ''
+            : `<button data-id="${u.id}" data-user="${esc(u.username)}" class="delete-one border border-gray-300 text-gray-600 px-2 py-0.5 rounded text-xs hover:bg-gray-100">삭제</button>`;
+          return `<tr class="hover:bg-gray-50 ${u.is_locked ? 'bg-red-50' : ''}">
+            <td class="px-4 py-2"><input type="checkbox" class="u-check cursor-pointer" value="${u.id}"></td>
+            <td class="px-4 py-2 text-gray-400">${u.id}</td>
+            <td class="px-4 py-2 font-medium">${esc(u.username)}${u.username === me ? ' <span class="text-xs text-gray-400">(나)</span>' : ''}</td>
+            <td class="px-4 py-2">${BADGE[u.role] || esc(u.role)}</td>
+            <td class="px-4 py-2">${lockBadge(u.is_locked)}</td>
+            <td class="px-4 py-2 ${u.failed_logins ? 'text-red-600 font-medium' : 'text-gray-400'}">${u.failed_logins ?? 0}</td>
+            <td class="date-cell px-4 py-2 text-gray-400">${u.is_locked ? ts(u.locked_at) : '-'}</td>
+            <td class="wrap-cell px-4 py-2 text-gray-600 max-w-xs truncate" title="${esc(u.lock_reason)}">${esc(u.lock_reason || '')}</td>
+            <td class="px-4 py-2 text-gray-600">${esc(u.role_granted_by || '')}</td>
+            <td class="px-4 py-2 space-x-1">${lockBtn}${revokeBtn}${deleteBtn}</td>
+          </tr>`;
+        }).join('');
+
+      renderPager(document.getElementById('user-pager'), d,
+        (p) => { uState.page = p; refreshUsers(); });
+      updateUserSelUi();
     }
 
     async function refreshUsers() {
-      const r = await fetch('/api/admin/users', { headers: authH() });
-      if (r.ok) renderUsers(await r.json());
+      const r = await fetchUsers();
+      renderUsers(r, await r.json().catch(() => ({})));
     }
+
+    function updateUserSelUi() {
+      document.querySelectorAll('.u-sel-count').forEach(el => { el.textContent = uSelected.size; });
+      document.getElementById('u-lock-selected').disabled = uSelected.size === 0;
+      document.getElementById('u-unlock-selected').disabled = uSelected.size === 0;
+      document.getElementById('u-delete-selected').disabled = uSelected.size === 0;
+      const boxes = document.querySelectorAll('#user-rows .u-check');
+      const all = document.getElementById('u-check-all');
+      all.checked = boxes.length > 0 && uSelected.size === boxes.length;
+      all.indeterminate = uSelected.size > 0 && uSelected.size < boxes.length;
+      all.disabled = boxes.length === 0;
+    }
+
+    function showUserMsg(text, ok) {
+      const el = document.getElementById('u-msg');
+      el.className = 'ml-auto ' + (ok ? 'text-emerald-600' : 'text-red-600');
+      el.textContent = text;
+    }
+
+    /* 일괄 차단/해제 공용. 서버 응답의 changed·skipped·self_skipped 를 그대로 알려준다. */
+    async function bulkUsers(url, payload, confirmText, verb) {
+      if (!confirm(confirmText)) return;
+      const r = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { showUserMsg(d.msg || `${verb} 실패 (HTTP ${r.status})`, false); return; }
+      const extra = (d.skipped?.length ? ` · 이미 ${verb} ${d.skipped.length}` : '')
+        + (d.posts_deleted ? ` · 게시글 ${d.posts_deleted}개 함께 삭제` : '')
+        + (d.self_skipped?.length ? ' · 본인 계정 제외' : '')
+        + (d.protected?.length ? ' · 시스템 계정 제외' : '')
+        + (d.not_found?.length ? ` · 없음 ${d.not_found.length}` : '');
+      showUserMsg(`${d.count}명 ${verb}했습니다${extra}`, true);
+      refreshUsers();
+    }
+
+    const lockUsers = (ids, label) => bulkUsers('/api/admin/users/lock',
+      { ids, reason: '관리자 페이지 수동 차단' }, `${label} 차단할까요? (로그인이 막힙니다)`, '차단');
+    const unlockUsers = (ids, label) => bulkUsers('/api/admin/users/unlock',
+      { ids }, `${label} 차단 해제할까요?`, '해제');
+    // 서버 _PROTECTED_USERS 와 같다 — 화면에서 삭제 버튼을 숨기는 용도일 뿐, 차단은 서버가 한다.
+    const PROTECTED = ['soarbot'];
+    const deleteUsers = (ids, label) => bulkUsers('/api/admin/users/delete',
+      { ids }, `${label} 삭제할까요?\n\n작성한 게시글도 함께 삭제되며 되돌릴 수 없습니다.`, '삭제');
+
+    // 행 안의 체크박스·버튼은 다시 그려질 때마다 새로 생기므로 tbody 에 한 번만 위임한다.
+    document.getElementById('user-rows').addEventListener('change', (e) => {
+      if (!e.target.classList.contains('u-check')) return;
+      const id = Number(e.target.value);
+      e.target.checked ? uSelected.add(id) : uSelected.delete(id);
+      updateUserSelUi();
+    });
+    document.getElementById('user-rows').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.classList.contains('revoke-btn')) revoke(b.dataset.user);
+      else if (b.classList.contains('lock-one')) lockUsers([Number(b.dataset.id)], `${b.dataset.user} 을(를)`);
+      else if (b.classList.contains('unlock-one')) unlockUsers([Number(b.dataset.id)], '이 회원을');
+      else if (b.classList.contains('delete-one')) deleteUsers([Number(b.dataset.id)], `${b.dataset.user} 을(를)`);
+    });
+    document.getElementById('u-check-all').addEventListener('change', (e) => {
+      document.querySelectorAll('#user-rows .u-check').forEach(cb => {
+        cb.checked = e.target.checked;
+        const id = Number(cb.value);
+        e.target.checked ? uSelected.add(id) : uSelected.delete(id);
+      });
+      updateUserSelUi();
+    });
+    document.getElementById('u-lock-selected').addEventListener('click', () => {
+      if (uSelected.size) lockUsers([...uSelected], `선택한 ${uSelected.size}명을`);
+    });
+    document.getElementById('u-unlock-selected').addEventListener('click', () => {
+      if (uSelected.size) unlockUsers([...uSelected], `선택한 ${uSelected.size}명을`);
+    });
+    document.getElementById('u-delete-selected').addEventListener('click', () => {
+      if (uSelected.size) deleteUsers([...uSelected], `선택한 ${uSelected.size}명을`);
+    });
+    document.getElementById('u-unlock-all').addEventListener('click', () => {
+      const q = document.getElementById('u-search').value.trim();
+      const role = document.getElementById('u-role').value;
+      const scope = [q && `검색 "${q}"`, role && `역할 ${role}`].filter(Boolean).join(' · ') || '조건 없음';
+      bulkUsers('/api/admin/users/unlock', { all_locked: true, q, role },
+        `차단된 회원을 전부 해제할까요? (${scope}, 다른 페이지 포함)`, '해제');
+    });
+
+    // 검색·필터가 바뀌면 1페이지부터. 검색어는 타이핑이 멈춘 뒤 0.3초에 조회.
+    function resetAndLoad() { uState.page = 1; refreshUsers(); }
+    let searchTimer;
+    document.getElementById('u-search').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(resetAndLoad, 300);
+    });
+    document.getElementById('u-role').addEventListener('change', resetAndLoad);
+    document.getElementById('u-locked').addEventListener('change', resetAndLoad);
+    bindSortHeaders(document.getElementById('user-head'), uState, refreshUsers);
 
     async function grant() {
       const msg = document.getElementById('gr-msg');

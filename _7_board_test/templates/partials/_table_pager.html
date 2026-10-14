@@ -16,6 +16,26 @@
   머리글(사유·제목 등)은 눌러도 반응하지 않는다 — 서버가 허용하지 않는 컬럼이라
   눌리면 400 이 되기 때문이다.
 #}
+{#
+  반응형 표 — 작은 화면(<1024px)은 지금처럼 가로 스크롤(overflow-x-auto + nowrap),
+  큰 화면(≥1024px)은 셀 여백을 줄이고 긴 글 칸(.wrap-cell: 사유·제목·조치)을
+  말줄임 대신 줄바꿈해서 한 화면에 모든 컬럼이 들어오게 한다.
+  표에 class="resp-table", 긴 글 칸에 class="wrap-cell" 만 붙이면 된다.
+#}
+<style>
+  @media (min-width: 1024px) {
+    table.resp-table th,
+    table.resp-table td { padding-left: .5rem; padding-right: .5rem; }
+    table.resp-table td.wrap-cell {
+      white-space: normal; overflow: visible; text-overflow: clip;
+      overflow-wrap: anywhere; min-width: 8rem; max-width: 22rem;
+    }
+  }
+  /* 1024~1279px 는 본문이 좁아 날짜(19자)를 '날짜 / 시각' 두 줄로 접는다. */
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    table.resp-table td.date-cell { white-space: normal; width: 6.5rem; }
+  }
+</style>
 <script>
   /* 표 하나의 보기 상태. per_page 20 = 한 페이지에 20건. */
   function newTableState() {
