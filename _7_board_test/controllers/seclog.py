@@ -43,8 +43,30 @@ def write_seclog(event, user, src_ip):
     pass   # 로그 파일 문제로 로그인이 멈추면 안 된다(가용성 우선)
 
 
+def write_404log(src_ip, path):
+  """HTTP 404 발생 기록 — Wazuh 탐지용(웹 스캐너 404 폭주).
+
+  write_seclog 와 같은 security.log 파일에 한 줄 더 쌓는다. 형식:
+    2026-10-08 15:44:01.228 http_404 src_ip=203.0.113.50 path=/admin
+  (밀리초·로그 인젝션 방어는 write_seclog 와 같은 이유 — 파일 상단 주석 참고.)
+  """
+  log_path = current_app.config.get('SECURITY_LOG_PATH')
+  if not log_path:
+    return
+  first_hop = str(src_ip or '').split(',')[0].strip()      # X-Forwarded-For 첫 홉만
+  now = datetime.now()
+  stamp = now.strftime('%Y-%m-%d %H:%M:%S.') + f'{now.microsecond // 1000:03d}'
+  line = f'{stamp} http_404 src_ip={_clean(first_hop, 45)} path={_clean(path, 120)}\n'
+  try:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'a', encoding='utf-8') as f:
+      f.write(line)
+  except OSError:
+    pass   # 로그 파일 문제로 요청이 멈추면 안 된다(가용성 우선)
+
+
 def write_web_scan_log(src_ip, status_code, path):
-  """Wazuh가 수집할 404 스캔 신호를 비밀값 없이 한 줄 기록한다."""
+  """Write the existing TeamPJ4 404 event format for Wazuh collection."""
   if status_code != 404:
     return
   log_path = current_app.config.get('SECURITY_LOG_PATH')
@@ -55,6 +77,48 @@ def write_web_scan_log(src_ip, status_code, path):
   stamp = now.strftime('%Y-%m-%d %H:%M:%S.') + f'{now.microsecond // 1000:03d}'
   line = (f'{stamp} web_scan_404 status=404 '
           f'src_ip={_clean(first_hop, 45)} path={_clean(path, 200)}\n')
+  try:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'a', encoding='utf-8') as f:
+      f.write(line)
+  except OSError:
+    pass
+
+def write_auth_fail(src_ip, path):
+  """admin API 키 인증 실패 기록 — Wazuh 탐지용(S6). write_404log 와 같은 구조.
+
+    2026-10-11 20:30:01.123 admin_auth_fail src_ip=203.0.113.171 path=/api/security/events
+  밀리초·로그 인젝션 방어는 write_404log 와 같은 이유(파일 상단 주석).
+  시도된 키 값은 절대 남기지 않는다(그 자체가 비밀 후보).
+  """
+  log_path = current_app.config.get('SECURITY_LOG_PATH')
+  if not log_path:
+    return
+  first_hop = str(src_ip or '').split(',')[0].strip()
+  now = datetime.now()
+  stamp = now.strftime('%Y-%m-%d %H:%M:%S.') + f'{now.microsecond // 1000:03d}'
+  line = f'{stamp} admin_auth_fail src_ip={_clean(first_hop, 45)} path={_clean(path, 120)}\n'
+  try:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'a', encoding='utf-8') as f:
+      f.write(line)
+  except OSError:
+    pass
+
+
+def write_gold_access(user, src_ip):
+  """골드 등급 민감자료 열람 기록 — Wazuh 탐지용(S9). write_seclog 와 같은 구조.
+
+    2026-10-11 20:30:01.123 gold_access user=zz_s9 src_ip=203.0.113.190
+  본문은 남기지 않는다(로그는 더 넓게 공유된다).
+  """
+  log_path = current_app.config.get('SECURITY_LOG_PATH')
+  if not log_path:
+    return
+  first_hop = str(src_ip or '').split(',')[0].strip()
+  now = datetime.now()
+  stamp = now.strftime('%Y-%m-%d %H:%M:%S.') + f'{now.microsecond // 1000:03d}'
+  line = f'{stamp} gold_access user={_clean(user)} src_ip={_clean(first_hop, 45)}\n'
   try:
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, 'a', encoding='utf-8') as f:

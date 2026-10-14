@@ -55,17 +55,56 @@ def admin_required(fn):
   return wrapper
 
 
-_BULK_MAX = 500   # 한 번에 처리할 수 있는 id 수 — 실수로 거대한 목록을 보내는 것 방지
+# ── 목록·일괄 처리 공용 도구 (회원·차단 IP·인시던트가 같이 쓴다) ──────────────
+_BULK_MAX = 500   # 한 번에 처리할 수 있는 항목 수 — 실수로 거대한 목록을 보내는 것 방지
+
+
+def _parse_list(data, key, item_ok):
+  """body[key] 가 1~_BULK_MAX 개짜리 목록이고 모든 항목이 item_ok 면 그 목록, 아니면 None."""
+  items = data.get(key)
+  if (isinstance(items, list) and 0 < len(items) <= _BULK_MAX
+      and all(item_ok(i) for i in items)):
+    return items
+  return None
 
 
 def _parse_ids(data):
   """body 의 ids 를 정수 목록으로. 형식이 틀리면 None(→ 라우트가 400).
   bool 은 int 의 하위형이라 True 가 1 로 통과하므로 따로 막는다."""
-  ids = data.get('ids')
-  if (isinstance(ids, list) and 0 < len(ids) <= _BULK_MAX
-      and all(isinstance(i, int) and not isinstance(i, bool) for i in ids)):
-    return ids
-  return None
+  return _parse_list(data, 'ids', lambda i: isinstance(i, int) and not isinstance(i, bool))
+
+
+def _parse_ips(data):
+  """body 의 ips 를 앞뒤 공백 없앤·중복 없는 문자열 목록으로. 형식이 틀리면 None."""
+  items = _parse_list(data, 'ips', lambda i: isinstance(i, str) and i.strip())
+  return None if items is None else list(dict.fromkeys(i.strip() for i in items))
+
+
+def _bulk_ok(label, changed, **extra):
+  """일괄 처리 응답 — 화면(bulkPost)이 count·changed·skipped… 를 같은 이름으로 읽는다."""
+  return jsonify({'msg': f'{len(changed)}{label}', 'count': len(changed),
+                  'changed': changed, 'actor': getattr(request, 'actor', 'unknown'),
+                  **extra}), 200
+
+
+def _list_or_page(query, key, all_order, sorts, id_column, default_sort):
+  """목록 응답. page·per_page 가 **없으면 예전처럼 전체**(봇·스크립트 호환),
+  있으면 공용 paginate 규약(page·per_page·sort·order + total…)."""
+  if 'page' not in request.args and 'per_page' not in request.args:
+    rows = query.order_by(all_order).all()
+    return jsonify({'count': len(rows), key: [r.to_dict() for r in rows]})
+  try:
+    rows, meta = paginate(query, request.args, sorts, id_column, default_sort=default_sort)
+  except SortError as e:
+    return jsonify({'msg': str(e)}), 400
+  return jsonify({'count': len(rows), key: [r.to_dict() for r in rows], **meta})
+
+
+def _requester_ip():
+  """지금 요청한 사람의 IP — app._client_ip 와 같은 규칙(XFF 첫 홉, 없으면 remote_addr).
+  app 모듈을 import 하면 순환 참조라 규칙만 같게 둔다."""
+  xff = request.headers.get('X-Forwarded-For', '')
+  return xff.split(',')[0].strip() if xff else (request.remote_addr or '')
 
 
 def _allowlist(param=None):
@@ -111,16 +150,8 @@ def list_users():
   locked_at|failed_logins). ★ page·per_page 를 **안 주면 예전처럼 전체** —
   privilege_revoke_bot.py 가 ?role=admin 으로 admin 전원을 읽기 때문이다
   (20건으로 잘리면 21번째 admin 부터 과잉권한 탐지에서 빠진다)."""
-  q = _user_filters(User.query, request.args)
-  if 'page' not in request.args and 'per_page' not in request.args:
-    rows = q.order_by(User.id.asc()).all()
-    return jsonify({'count': len(rows), 'users': [u.to_dict() for u in rows]})
-
-  try:
-    rows, meta = paginate(q, request.args, _USER_SORTS, User.id, default_sort='id')
-  except SortError as e:
-    return jsonify({'msg': str(e)}), 400
-  return jsonify({'count': len(rows), 'users': [u.to_dict() for u in rows], **meta})
+  return _list_or_page(_user_filters(User.query, request.args), 'users',
+                       User.id.asc(), _USER_SORTS, User.id, 'id')
 
 
 @admin_bp.route('/users/lock', methods=['POST'])
@@ -158,10 +189,8 @@ def lock_users_bulk():
         severity='Medium', reason=f'관리자 계정 차단 {len(targets)}건: {reason}'[:200],
         users=names[:255], source='admin-console'))
   db.session.commit()
-  changed = sorted(u.id for u in targets)
-  return jsonify({'msg': f'{len(changed)}명 차단', 'count': len(changed),
-                  'changed': changed, 'skipped': skipped, 'not_found': not_found,
-                  'self_skipped': self_skipped, 'actor': actor}), 200
+  return _bulk_ok('명 차단', sorted(u.id for u in targets), skipped=skipped,
+                  not_found=not_found, self_skipped=self_skipped)
 
 
 # 지우면 안 되는 시스템 계정 — soarbot 은 '보안' 자동 공지글의 작성자다.
@@ -206,11 +235,8 @@ def delete_users_bulk():
         reason=f'관리자 회원 삭제 {len(targets)}명(게시글 {posts_deleted}개 포함)'[:200],
         users=names[:255], source='admin-console'))
   db.session.commit()
-  changed = sorted(target_ids)
-  return jsonify({'msg': f'{len(changed)}명 삭제', 'count': len(changed),
-                  'changed': changed, 'posts_deleted': posts_deleted,
-                  'not_found': not_found, 'self_skipped': self_skipped,
-                  'protected': protected, 'actor': actor}), 200
+  return _bulk_ok('명 삭제', sorted(target_ids), posts_deleted=posts_deleted,
+                  not_found=not_found, self_skipped=self_skipped, protected=protected)
 
 
 @admin_bp.route('/users/unlock', methods=['POST'])
@@ -240,10 +266,8 @@ def unlock_users_bulk():
     u.failed_logins = 0
     u.lock_reason = None
   db.session.commit()
-  changed = sorted(u.id for u in targets)
-  return jsonify({'msg': f'{len(changed)}명 차단 해제', 'count': len(changed),
-                  'changed': changed, 'skipped': skipped, 'not_found': not_found,
-                  'actor': getattr(request, 'actor', 'unknown')}), 200
+  return _bulk_ok('명 차단 해제', sorted(u.id for u in targets),
+                  skipped=skipped, not_found=not_found)
 
 
 @admin_bp.route('/violations', methods=['GET'])
@@ -435,9 +459,102 @@ def unblock_ip():
 @admin_bp.route('/blocked', methods=['GET'])
 @admin_required
 def list_blocked():
-  """차단된 IP 목록."""
-  rows = BlockedIP.query.order_by(BlockedIP.blocked_at.desc()).all()
-  return jsonify({'count': len(rows), 'blocked': [r.to_dict() for r in rows]})
+  """차단된 IP 목록. 검색: ?q=(IP·사유·차단자 부분 일치)
+
+  페이징: ?page= &per_page= &sort=blocked_at|ip|blocked_by &order=
+  page·per_page 가 없으면 예전처럼 전체(최신 차단 먼저) — 회원 목록과 같은 규약."""
+  return _list_or_page(_blocked_filters(BlockedIP.query, request.args), 'blocked',
+                       BlockedIP.blocked_at.desc(), _BLOCKED_SORTS, BlockedIP.ip,
+                       'blocked_at')
+
+
+# 차단 IP 목록 정렬 허용 컬럼 — 관리자 화면 표 머리글의 data-sort 와 같다.
+# 동률 2차 정렬키는 기본키 ip(겹치지 않는다).
+_BLOCKED_SORTS = {
+    'blocked_at': BlockedIP.blocked_at,
+    'ip': BlockedIP.ip,
+    'blocked_by': BlockedIP.blocked_by,
+}
+
+
+def _blocked_filters(q, src):
+  """차단 IP 목록·전체 해제가 같이 쓰는 검색. q 는 IP·사유·차단자 부분 일치."""
+  term = (src.get('q') or '').strip()
+  if term:
+    q = q.filter(db.or_(BlockedIP.ip.contains(term, autoescape=True),
+                        BlockedIP.reason.contains(term, autoescape=True),
+                        BlockedIP.blocked_by.contains(term, autoescape=True)))
+  return q
+
+
+@admin_bp.route('/blocked/block', methods=['POST'])
+@admin_required
+def block_ips_bulk():
+  """IP 일괄 차단. body: {ips: ['1.2.3.4', '2001:db8::1', ..], reason?}
+
+  - 형식이 IP 가 아니면 invalid 로 돌려주고 건너뛴다(오타가 표에 남지 않게).
+  - 이미 차단된 IP 는 skipped — 처음 차단한 시각·사유를 덮어쓰지 않는다.
+  - ★ 지금 요청한 사람의 IP 는 self_skipped — /api/admin 은 차단돼도 통하지만
+    관리자 화면(/admin)·로그인은 403 이 되어 그 자리에서 화면을 잃는다.
+  - '전부 차단(all)' 은 없다. 감사기록: IP 마다 security_events 한 줄(source='admin-console')."""
+  import ipaddress
+
+  data = request.get_json(silent=True) or {}
+  ips = _parse_ips(data)
+  if ips is None:
+    return jsonify({'msg': f'ips(IP 문자열 목록, 1~{_BULK_MAX}개)가 필요합니다.'}), 400
+
+  valid, invalid = [], []
+  for raw in ips:
+    try:
+      valid.append(str(ipaddress.ip_address(raw)))   # 표기 정규화(IPv6 축약 등)
+    except ValueError:
+      invalid.append(raw)
+  valid = list(dict.fromkeys(valid))
+
+  me = _requester_ip()
+  self_skipped = [ip for ip in valid if ip == me]
+  existing = {r.ip for r in BlockedIP.query.filter(BlockedIP.ip.in_(valid))} if valid else set()
+  skipped = sorted(ip for ip in valid if ip in existing and ip != me)
+  targets = [ip for ip in valid if ip not in existing and ip != me]
+
+  actor = getattr(request, 'actor', 'unknown')
+  reason = (data.get('reason') or f'관리자 수동 차단 by {actor}')[:200]
+  for ip in targets:
+    db.session.add(BlockedIP(ip=ip, reason=reason, blocked_by=actor))
+    db.session.add(SecurityEvent(
+        student=actor[:50], src_ip=ip, fail_count=0, decision='deny', severity='Medium',
+        reason=f'관리자 IP 차단: {reason}'[:200], users='', source='admin-console'))
+  db.session.commit()
+  return _bulk_ok('개 IP 차단', sorted(targets), skipped=skipped,
+                  invalid=sorted(invalid), self_skipped=self_skipped)
+
+
+@admin_bp.route('/blocked/unblock', methods=['POST'])
+@admin_required
+def unblock_ips_bulk():
+  """IP 일괄 차단 해제(= 차단 목록에서 삭제).
+
+  body: {ips: [..]}         → 고른 IP 만
+        {all: true, q?}     → 검색 조건에 맞는 차단 IP 전부(다른 페이지 포함)
+  형식 검사는 하지 않는다 — 예전에 형식 검사 없이 들어간 값도 지울 수 있어야 한다."""
+  data = request.get_json(silent=True) or {}
+  if data.get('all') is True:
+    rows = _blocked_filters(BlockedIP.query, data).all()
+    not_found = []
+  else:
+    ips = _parse_ips(data)
+    if ips is None:
+      return jsonify({'msg': f'ips(IP 문자열 목록, 1~{_BULK_MAX}개) 또는 '
+                             'all: true 가 필요합니다.'}), 400
+    rows = BlockedIP.query.filter(BlockedIP.ip.in_(ips)).all()
+    not_found = sorted(set(ips) - {r.ip for r in rows})
+
+  changed = sorted(r.ip for r in rows)
+  for r in rows:
+    db.session.delete(r)
+  db.session.commit()
+  return _bulk_ok('개 IP 차단 해제', changed, not_found=not_found)
 
 
 _SEV_RANK = {'Low': 1, 'Medium': 2, 'High': 3, 'Critical': 4}
